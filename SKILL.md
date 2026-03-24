@@ -175,7 +175,7 @@ python -c "import os, pathlib, datetime; p = pathlib.Path(os.path.expanduser('~'
 - **If an age is returned:** Ask the user:
   > "Your MyTime projects were last refreshed **[age]**. Use cached data or refresh?"
   > (cached / refresh)
-  - **cached:** read `projects.toon` from the default cache location `%USERPROFILE%\.mytime-booker\projects.toon` and proceed to Step 7
+  - **cached:** read `projects.toon` from the default cache location in the current user's home directory (`~/.mytime-booker/projects.toon`) and proceed to Step 7. No separate home-path lookup step is needed.
   - **refresh:** proceed to Step 6
 
 ---
@@ -289,7 +289,7 @@ Then say:
 
 1. **Generate the Excel immediately** using the `Write` tool + the script defaults. Two steps:
 
-**Step A — write `bookings.csv`** using the `Write` tool at `%USERPROFILE%\.mytime-booker\bookings.csv`.
+**Step A — write `bookings.csv`** using the `Write` tool at the default path in the current user's home directory (`~/.mytime-booker/bookings.csv`). No separate home-path lookup step is needed.
 
 The CSV has exactly 10 columns matching the timecard template. Do not include skipped events. Pre-split project and task names before writing — strip the leading number prefix:
 - `"295189 - BAW-CC-Cloud-OU216"` → `project_number=295189`, `project_name=BAW-CC-Cloud-OU216`
