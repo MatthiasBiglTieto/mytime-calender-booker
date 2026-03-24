@@ -113,16 +113,18 @@ def save_timecard(rows, output_path, template_path=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Write pre-mapped calendar events into a MyTime timecard xlsx")
-    parser.add_argument("--events", required=True, help="Path to JSON file with confirmed, pre-mapped calendar events")
+    parser.add_argument("--events", default=None, help="Path to JSON file with confirmed, pre-mapped calendar events (omit to read from stdin)")
     parser.add_argument("--template", default=TEMPLATE_PATH, help="Path to the blank template xlsx")
     parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Output path for the filled xlsx")
     args = parser.parse_args()
 
-    if not os.path.exists(args.events):
-        print(f"[book-timecard] ERROR: events file not found: {args.events}")
-        sys.exit(1)
-
-    events = load_events_from_json(args.events)
+    if args.events:
+        if not os.path.exists(args.events):
+            print(f"[book-timecard] ERROR: events file not found: {args.events}")
+            sys.exit(1)
+        events = load_events_from_json(args.events)
+    else:
+        events = json.load(sys.stdin)
     print(f"[book-timecard] Loaded {len(events)} events")
 
     rows = build_booking_rows(events)

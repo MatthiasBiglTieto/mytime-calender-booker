@@ -16,7 +16,7 @@ Three phases, all implemented:
 
 - **Phase 1:** Export calendar from Outlook → filter → present for review
 - **Phase 2:** Load MyTime projects → agent maps events to project/task pairs → user confirms
-- **Phase 3:** Confirmed mappings saved to JSON → Excel generated automatically → final review
+- **Phase 3:** Mappings piped directly to Excel generator → file ready immediately
 
 ---
 
@@ -300,7 +300,7 @@ Then say:
 
 **If user says "ok" or "confirm":**
 
-1. **Save the confirmed mappings to JSON.** Build a JSON array from `booking_mappings` with these fields per event: `title`, `date`, `start`, `end`, `duration_hours`, `project_id`, `project_name`, `task_id`, `task_name`. Write it to disk using PowerShell:
+1. **Generate the Excel immediately** by piping the confirmed mappings as JSON directly to the script — no intermediate file needed. Build a JSON array from `booking_mappings` with these fields per event: `title`, `date`, `start`, `end`, `duration_hours`, `project_id`, `project_name`, `task_id`, `task_name`. **Do not include events that were skipped.**
 
 ```powershell
 $json = @'
@@ -318,23 +318,13 @@ $json = @'
   }
 ]
 '@
-$json | Out-File -Encoding utf8 "$env:USERPROFILE\.mytime-booker\calendar_events.json"
+$json | python "D:\ai\custom-skills\mytime-calender-booker\scripts\book-timecard.py" --output "$env:USERPROFILE\Downloads\timecard_output.xlsx"
 ```
 
-Replace the example with the actual confirmed events. **Do not include events that were skipped.**
+Replace the example with the actual confirmed events.
 
-2. **Generate the Excel immediately:**
-
-```bash
-python "D:\ai\custom-skills\mytime-calender-booker\scripts\book-timecard.py" --events "%USERPROFILE%\.mytime-booker\calendar_events.json" --output "%USERPROFILE%\Downloads\timecard_output.xlsx"
-```
-
-3. **Present the output** (OK/UNMAPPED rows) as reported by the script. Then say:
-> "Here's your timecard. You can:
-> - Say **save** to confirm (it's already saved to `Downloads\timecard_output.xlsx`)
-> - Say **pick #N** to change project/task for a specific row
-> - Say **skip #N** to remove a row
-> - Say **stop** to discard"
+2. **Present the output** (OK/UNMAPPED rows) as reported by the script and tell the user:
+> "Your timecard has been saved to `Downloads\timecard_output.xlsx` — ready to upload to MyTime. If anything needs adjusting, say **pick #N** to remap an event or **skip #N** to remove one."
 
 **If user says "pick #N":**
 Present a searchable project+task menu for that event. The user picks or types a search term. Update the mapping and show the updated table. Ask for confirmation again.
@@ -349,25 +339,19 @@ Remove the event from the mapping list. Show the updated table. Ask for confirma
 
 ## Phase 3: Final Timecard Review
 
-The Excel is generated automatically after Step 11 confirmation. Phase 3 is only the final review loop.
+The Excel is generated automatically after Step 11 confirmation. If the user requests changes via **pick #N** or **skip #N**:
 
----
-
-### Step 12 — Handle final review actions
-
-**"save":** The file is already saved to `Downloads\timecard_output.xlsx`. Tell the user the exact path and that they can upload it to MyTime.
+### Step 12 — Handle post-generation adjustments
 
 **"pick #N":**
 1. Re-open `booking_mappings` in context.
 2. For row N, present the list of available projects and tasks from `projects.json`.
 3. Let the user choose.
 4. Update the event in `booking_mappings`.
-5. Re-save the updated events JSON and re-run `book-timecard.py` (same commands as Step 11).
+5. Re-pipe the updated JSON and re-run `book-timecard.py` (same stdin-pipe command as Step 11).
 6. Show the updated output.
 
-**"skip #N":** Remove the row from `booking_mappings`, re-save JSON, re-run `book-timecard.py`, show updated output.
-
-**"stop":** Tell the user the file at `Downloads\timecard_output.xlsx` will not be used and they should delete it if needed.
+**"skip #N":** Remove the row from `booking_mappings`, re-pipe JSON, re-run `book-timecard.py`, show updated output.
 
 ---
 
@@ -398,5 +382,4 @@ mytime-calender-booker/
 |---|---|---|
 | `%USERPROFILE%\.mytime-booker\calendar.ics` | Every Phase 1 export | Yes — always fresh |
 | `%USERPROFILE%\.mytime-booker\projects.json` | When user confirms projects changed | Only when user says "yes" |
-| `%USERPROFILE%\.mytime-booker\calendar_events.json` | After Step 11 confirmation | Yes — overwritten each confirmation |
 | `Downloads\timecard_output.xlsx` | After Step 11 confirmation | Yes — overwritten each confirmation |
