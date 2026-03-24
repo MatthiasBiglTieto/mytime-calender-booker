@@ -6,6 +6,7 @@ import sys
 import openpyxl
 
 TEMPLATE_PATH = os.path.join(os.path.expanduser("~"), ".mytime-booker", "timecard_template.xlsx")
+DEFAULT_EVENTS = os.path.join(os.path.expanduser("~"), ".mytime-booker", "bookings.csv")
 DEFAULT_OUTPUT = os.path.join(os.path.expanduser("~"), "Downloads", "timecard_output.xlsx")
 DEFAULT_TYPE = "Normal -AT"
 
@@ -63,8 +64,8 @@ def main():
         description="Append pre-mapped calendar events into a MyTime timecard xlsx"
     )
     parser.add_argument(
-        "--events", required=True,
-        help="Path to CSV file with confirmed, pre-mapped events"
+        "--events", default=DEFAULT_EVENTS,
+        help=f"Path to CSV file with confirmed, pre-mapped events (default: {DEFAULT_EVENTS})"
     )
     parser.add_argument(
         "--template", default=TEMPLATE_PATH,

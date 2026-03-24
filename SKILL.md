@@ -50,16 +50,16 @@ Run the export script with the calculated date range. Build the command based on
 
 ```bash
 # This week, include private:
-powershell -ExecutionPolicy Bypass -File "D:\ai\custom-skills\mytime-calender-booker\scripts\export-calendar.ps1" -StartDate "2026-03-17" -EndDate "2026-03-23"
+powershell -ExecutionPolicy Bypass -File "$HOME/.agents/skills/mytime-calender-booker/scripts/export-calendar.ps1" -StartDate "2026-03-17" -EndDate "2026-03-23"
 
 # This week, skip private:
-powershell -ExecutionPolicy Bypass -File "D:\ai\custom-skills\mytime-calender-booker\scripts\export-calendar.ps1" -StartDate "2026-03-17" -EndDate "2026-03-23" -SkipPrivate
+powershell -ExecutionPolicy Bypass -File "$HOME/.agents/skills/mytime-calender-booker/scripts/export-calendar.ps1" -StartDate "2026-03-17" -EndDate "2026-03-23" -SkipPrivate
 
 # Today, skip private:
-powershell -ExecutionPolicy Bypass -File "D:\ai\custom-skills\mytime-calender-booker\scripts\export-calendar.ps1" -StartDate "2026-03-20" -EndDate "2026-03-20" -SkipPrivate
+powershell -ExecutionPolicy Bypass -File "$HOME/.agents/skills/mytime-calender-booker/scripts/export-calendar.ps1" -StartDate "2026-03-20" -EndDate "2026-03-20" -SkipPrivate
 
 # Custom range:
-powershell -ExecutionPolicy Bypass -File "D:\ai\custom-skills\mytime-calender-booker\scripts\export-calendar.ps1" -StartDate "2026-03-20" -EndDate "2026-03-27"
+powershell -ExecutionPolicy Bypass -File "$HOME/.agents/skills/mytime-calender-booker/scripts/export-calendar.ps1" -StartDate "2026-03-20" -EndDate "2026-03-27"
 ```
 
 The script:
@@ -78,16 +78,16 @@ If the script fails:
 
 ```bash
 # This week, include private:
-python "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.py" --range this-week
+python "$HOME/.agents/skills/mytime-calender-booker/scripts/parse-ics.py" --range this-week
 
 # This week, skip private:
-python "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.py" --range this-week --skip-private
+python "$HOME/.agents/skills/mytime-calender-booker/scripts/parse-ics.py" --range this-week --skip-private
 
 # Today, skip private:
-python "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.py" --range today --skip-private
+python "$HOME/.agents/skills/mytime-calender-booker/scripts/parse-ics.py" --range today --skip-private
 
 # Custom range, skip private:
-python "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.py" --range custom --start 2026-03-20 --end 2026-03-27 --skip-private
+python "$HOME/.agents/skills/mytime-calender-booker/scripts/parse-ics.py" --range custom --start 2026-03-20 --end 2026-03-27 --skip-private
 ```
 
 The `--range`, `--start`, `--end`, and `--skip-private` flags must match what was passed to the export script.
@@ -169,18 +169,17 @@ Prerequisite: `calendar_events` must be in context from Phase 1. Do not start Ph
 
 ### Step 5 — Check if project data is fresh
 
-Check whether `projects.toon` exists and read its age. Use this PowerShell command — note `[System.Environment]::GetFolderPath('UserProfile')` instead of `$env:USERPROFILE` to avoid bash eating the `$`:
+Check whether `projects.toon` exists and how old it is using Python (no PowerShell needed):
 
-```powershell
-powershell -ExecutionPolicy Bypass -Command "& { \$p = [System.Environment]::GetFolderPath('UserProfile') + '\.mytime-booker\projects.toon'; if (Test-Path \$p) { \$age = (Get-Date) - (Get-Item \$p).LastWriteTime; \$days = [math]::Floor(\$age.TotalDays); \$hours = [math]::Floor(\$age.TotalHours); if (\$days -ge 1) { Write-Output (\$days.ToString() + ' day(s) ago') } else { Write-Output (\$hours.ToString() + ' hour(s) ago') } } else { Write-Output 'not found' } }"
+```bash
+python -c "import os, pathlib, datetime; p = pathlib.Path(os.path.expanduser('~')) / '.mytime-booker' / 'projects.toon'; print('not found' if not p.exists() else str(round((datetime.datetime.now() - datetime.datetime.fromtimestamp(p.stat().st_mtime)).total_seconds() / 3600, 1)) + ' hour(s) ago')"
 ```
 
 - **If `not found`:** treat as first run — proceed directly to Step 6.
-- **If the command itself errors** (e.g. execution policy, quoting issue): fall back to reading the file with the `Read` tool at the path returned by: `powershell -ExecutionPolicy Bypass -Command "Write-Output ([System.Environment]::GetFolderPath('UserProfile') + '\.mytime-booker\projects.toon')"`. If the Read succeeds, check the `scraped_at` field for age. If it fails, treat as not found.
 - **If an age is returned:** Ask the user:
   > "Your MyTime projects were last refreshed **[age]**. Use cached data or refresh?"
   > (cached / refresh)
-  - **cached:** read `projects.toon` with the `Read` tool and proceed to Step 7
+  - **cached:** read `projects.toon` with the `Read` tool at `~/.mytime-booker/projects.toon` (use `python -c "import os; print(os.path.expanduser('~'))"` to get the absolute home path if needed) and proceed to Step 7
   - **refresh:** proceed to Step 6
 
 ---
@@ -199,7 +198,7 @@ Tell the user:
 Wait for the file path. Then parse it:
 
 ```bash
-python "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-projects.py" --file "C:\Users\MatthiasBigl\Desktop\My Time.html"
+python "$HOME/.agents/skills/mytime-calender-booker/scripts/parse-projects.py" --file "<path given by user>"
 ```
 
 The script:
@@ -292,14 +291,15 @@ Then say:
 
 **If user says "ok" or "confirm":**
 
-1. **Generate the Excel immediately** using the `Write` tool + `--events` flag. Two steps:
+1. **Generate the Excel immediately** using the `Write` tool + the script defaults. Three steps:
 
-**Step A — get the user's profile path:**
-```powershell
-powershell -ExecutionPolicy Bypass -Command "Write-Output ([System.Environment]::GetFolderPath('UserProfile'))"
+**Step A — get the home path** (needed for the Write tool):
+```bash
+python -c "import os; print(os.path.expanduser('~'))"
 ```
+This prints e.g. `C:\Users\MatthiasBigl`. Use that path in Step B.
 
-**Step B — write `bookings.csv`** using the `Write` tool at `<USERPROFILE>\.mytime-booker\bookings.csv`.
+**Step B — write `bookings.csv`** using the `Write` tool at `<home>\.mytime-booker\bookings.csv`.
 
 The CSV has exactly 10 columns matching the timecard template. Do not include skipped events. Pre-split project and task names before writing — strip the leading number prefix:
 - `"295189 - BAW-CC-Cloud-OU216"` → `project_number=295189`, `project_name=BAW-CC-Cloud-OU216`
@@ -313,12 +313,10 @@ project_number,project_name,task_number,task_name,type,date,hours,comment,time_f
 291648,CE COMPDevActive Deliv. OU216,07,Chapter Work,Normal -AT,2026-03-26,1.0,Weekly WebDev 2026,14:00,15:00
 ```
 
-**Step C — run the script:**
-```powershell
-python "D:\ai\custom-skills\mytime-calender-booker\scripts\book-timecard.py" --events "<USERPROFILE>\.mytime-booker\bookings.csv" --output "<USERPROFILE>\Downloads\timecard_output.xlsx"
+**Step C — run the script** (uses built-in defaults for `--events` and `--output`, no path args needed):
+```bash
+python "$HOME/.agents/skills/mytime-calender-booker/scripts/book-timecard.py"
 ```
-
-Replace `<USERPROFILE>` with the actual path from Step A. No pipe needed.
 
 2. **Present the output** (OK/UNMAPPED rows) as reported by the script and tell the user:
 > "Your timecard has been saved to `Downloads\timecard_output.xlsx` — ready to upload to MyTime. If anything needs adjusting, say **pick #N** to remap an event or **skip #N** to remove one."
@@ -345,10 +343,10 @@ The Excel is generated automatically after Step 9 confirmation. If the user requ
 2. For row N, present the list of available projects and tasks from `projects.toon`.
 3. Let the user choose.
 4. Update the event in `booking_mappings`.
-5. Re-write the updated `bookings.csv` using the `Write` tool and re-run `book-timecard.py` with the same `--events` flag as Step 9.
+5. Re-write the updated `bookings.csv` using the `Write` tool and re-run `python "$HOME/.agents/skills/mytime-calender-booker/scripts/book-timecard.py"` (same defaults as Step 9).
 6. Show the updated output.
 
-**"skip #N":** Remove the row from `booking_mappings`, re-write `bookings.csv`, re-run `book-timecard.py`, show updated output.
+**"skip #N":** Remove the row from `booking_mappings`, re-write `bookings.csv`, re-run `python "$HOME/.agents/skills/mytime-calender-booker/scripts/book-timecard.py"`, show updated output.
 
 ---
 
