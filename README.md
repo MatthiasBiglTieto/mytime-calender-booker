@@ -20,8 +20,7 @@ Supports both **classic Outlook** (`OUTLOOK.EXE`) and **new modern Outlook** (`o
 |---|---|
 | Windows + PowerShell 5.1+ | Outlook COM automation |
 | Microsoft Outlook (classic or new) | Calendar data source |
-| Node.js | ICS file parsing |
-| Python 3 + `openpyxl` | Excel generation |
+| Python 3 + `openpyxl` | ICS parsing, project mapping, Excel generation |
 
 Install the Python dependency:
 ```bash
@@ -101,7 +100,7 @@ You can pick a different project/task for any row before confirming.
 
 ### Phase 3 — Excel generation
 
-Once confirmed, the agent writes a `calendar_events.json` and immediately generates:
+Once confirmed, the agent immediately generates:
 
 ```
 Downloads\timecard_output.xlsx
@@ -132,7 +131,7 @@ mytime-calender-booker/
   README.md                  ← this file
   scripts/
     export-calendar.ps1      ← Outlook COM export (PowerShell, classic + new Outlook)
-    parse-ics.js             ← ICS parser and date filter (Node.js)
+    parse-ics.py             ← ICS parser and date filter (Python, stdlib)
     parse-projects.py        ← MyTime HTML → projects.json (Python)
     book-timecard.py         ← confirmed mappings → timecard.xlsx (Python + openpyxl)
   config/
@@ -145,7 +144,6 @@ mytime-calender-booker/
 |---|---|---|
 | `calendar.ics` | `%USERPROFILE%\.mytime-booker\` | Every run |
 | `projects.json` | `%USERPROFILE%\.mytime-booker\` | Only when you say projects changed |
-| `calendar_events.json` | `%USERPROFILE%\.mytime-booker\` | Every confirmed booking |
 | `timecard_output.xlsx` | `%USERPROFILE%\Downloads\` | Every confirmed booking |
 
 ---
