@@ -144,11 +144,7 @@ Then say:
 ### Step 4 — Handle user review actions
 
 **If user says "ok" or "confirm":**
-Store the final filtered event list in context as `calendar_events`. The full JSON including `description` fields is available and will be used in Phase 2. Immediately offer to continue:
-> "Got it — [N] event(s) confirmed. **Ready to map them to MyTime projects now?** (yes / not yet)"
-
-- If the user says **yes**: proceed directly to Phase 2 (Step 5).
-- If the user says **not yet / later**: stop and wait.
+Store the final filtered event list in context as `calendar_events`. The full JSON including `description` fields is available and will be used in Phase 2. Proceed directly to Phase 2 (Step 5) in the same turn — no extra confirmation needed.
 
 **If user says "remove #N":**
 Remove the specified event(s) from the list, show the updated table, and ask for confirmation again.
@@ -179,7 +175,7 @@ python -c "import os, pathlib, datetime; p = pathlib.Path(os.path.expanduser('~'
 - **If an age is returned:** Ask the user:
   > "Your MyTime projects were last refreshed **[age]**. Use cached data or refresh?"
   > (cached / refresh)
-  - **cached:** read `projects.toon` with the `Read` tool at `~/.mytime-booker/projects.toon` (use `python -c "import os; print(os.path.expanduser('~'))"` to get the absolute home path if needed) and proceed to Step 7
+  - **cached:** read `projects.toon` from the default cache location in the current user's home directory (`~/.mytime-booker/projects.toon`) and proceed to Step 7. No separate home-path lookup step is needed.
   - **refresh:** proceed to Step 6
 
 ---
@@ -291,15 +287,9 @@ Then say:
 
 **If user says "ok" or "confirm":**
 
-1. **Generate the Excel immediately** using the `Write` tool + the script defaults. Three steps:
+1. **Generate the Excel immediately** using the `Write` tool + the script defaults. Two steps:
 
-**Step A — get the home path** (needed for the Write tool):
-```bash
-python -c "import os; print(os.path.expanduser('~'))"
-```
-This prints e.g. `C:\Users\MatthiasBigl`. Use that path in Step B.
-
-**Step B — write `bookings.csv`** using the `Write` tool at `<home>\.mytime-booker\bookings.csv`.
+**Step A — write `bookings.csv`** using the `Write` tool at the default path in the current user's home directory (`~/.mytime-booker/bookings.csv`). No separate home-path lookup step is needed.
 
 The CSV has exactly 10 columns matching the timecard template. Do not include skipped events. Pre-split project and task names before writing — strip the leading number prefix:
 - `"295189 - BAW-CC-Cloud-OU216"` → `project_number=295189`, `project_name=BAW-CC-Cloud-OU216`
@@ -313,7 +303,7 @@ project_number,project_name,task_number,task_name,type,date,hours,comment,time_f
 291648,CE COMPDevActive Deliv. OU216,07,Chapter Work,Normal -AT,2026-03-26,1.0,Weekly WebDev 2026,14:00,15:00
 ```
 
-**Step C — run the script** (uses built-in defaults for `--events` and `--output`, no path args needed):
+**Step B — run the script** (uses built-in defaults for `--events` and `--output`, no path args needed):
 ```bash
 python "$HOME/.agents/skills/mytime-calender-booker/scripts/book-timecard.py"
 ```
