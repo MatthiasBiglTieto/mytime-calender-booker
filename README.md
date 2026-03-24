@@ -68,6 +68,9 @@ AI maps each meeting to a MyTime project and task using email domains, attendee 
 **Phase 3 — Excel generation**
 Confirmed mappings are written directly to `Downloads\timecard_output.xlsx` in the format MyTime expects for import.
 
+**Phase 4 — Import to My Time**
+This cant be automated. Go to Mytime and use the Import button to upload the excel. 
+
 ---
 
 ## Output
