@@ -92,12 +92,10 @@ python "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.py" --range
 
 The `--range`, `--start`, `--end`, and `--skip-private` flags must match what was passed to the export script.
 
-The parser output is a JSON array. Each event contains:
+The parser output is a TOON array. Each event contains:
 - `title`, `date`, `start`, `end`, `duration_hours` — core scheduling fields
-- `description` — the actual meeting body text, cleaned of Teams join URLs and dial-in noise. This is the most valuable field for Phase 2 task mapping.
-- `is_private`, `status`, `location`, `organizer`, `attendees`, `recurring`
-
-**Note on descriptions:** Outlook writes two `DESCRIPTION` fields per event (real body first, then `"Reminder"`). The parser automatically keeps the longer/real one. If an event has no meaningful body, `description` will be `"Reminder"` or `null`.
+- `description` — the actual meeting body text, truncated at the first Teams/phone boilerplate line (meeting IDs, dial-in numbers, etc.) so legal disclaimers are never included. If no meaningful content remains, `description` will be `null`.
+- `is_private`, `location`, `organizer`, `attendee_domains` (unique email domains of attendees, e.g. `["bawaggroup.com", "tieto.com"]`), `recurring`
 
 If the parse script exits with an error:
 - `ICS file not found` → the export script did not run or failed silently. Retry from Step 2a.
@@ -223,7 +221,7 @@ For each event in `calendar_events`, find the best-matching (project, task) pair
 
 #### Signal 1 — Email domain match (strongest)
 
-Extract all email addresses from the event's `organizer` and `attendees` fields. Strip the domain from each address.
+Extract all unique email domains from the event's `organizer` and `attendee_domains` fields.
 
 - If all or most attendees share an external domain (e.g. `@customer.com`): prefer projects whose name or project manager suggests that customer. Do NOT match internal projects.
 - If attendees are mostly internal (e.g. `@yourcompany.com`): match internal projects.

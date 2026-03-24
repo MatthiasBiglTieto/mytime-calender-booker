@@ -88,7 +88,7 @@ mytime-calender-booker/
   README.md                  ← this file
   scripts/
     export-calendar.ps1      ← Outlook COM export (PowerShell)
-    parse-ics.py             ← ICS parser and date filter (Python, stdlib)
+    parse-ics.py             ← ICS parser and date filter (Python, toon_format)
     parse-projects.py        ← MyTime HTML → projects.toon (Python, toon_format)
     book-timecard.py         ← mappings → timecard.xlsx (Python, openpyxl)
 ```

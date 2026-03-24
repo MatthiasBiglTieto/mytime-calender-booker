@@ -12,15 +12,16 @@ Usage:
 The ICS file is produced by export-calendar.ps1 before calling this script.
 Default file location: %USERPROFILE%\\.mytime-booker\\calendar.ics
 
-Output: JSON array of events to stdout
+Output: TOON array of events to stdout
 """
 
 import argparse
-import json
 import os
 import re
 import sys
 from datetime import date, datetime, timedelta
+
+from toon_format import encode as toon_encode
 
 
 # ---------------------------------------------------------------------------
@@ -255,18 +256,38 @@ def format_time(d):
 def clean_description(raw):
     if not raw:
         return None
-    text = raw
-    # Strip Microsoft Teams join URLs and safelinks
-    text = re.sub(r"https?://eur\d+\.safelinks[^\s>]*", "", text)
-    text = re.sub(r"https?://teams\.microsoft[^\s>]*", "", text)
-    text = re.sub(r"<https?://[^>]*>", "", text)
-    text = re.sub(r"Jetzt an der Besprechung teilnehmen\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"Microsoft Teams.*?Hilfe\?", "", text, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r"Benötigen Sie Hilfe\?", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"_{5,}", "", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    text = text.strip()
-    return text if text else None
+    # Truncate at the first line that signals Teams/phone boilerplate.
+    # This reliably cuts before legal disclaimers without needing language-specific patterns.
+    _BOILERPLATE = re.compile(
+        r"microsoft teams"
+        r"|^\s*\+\d"                          # phone number line
+        r"|besprechungs-id|meeting id"
+        r"|telefonkonferenz-id|conference id"
+        r"|passcode:|kennung:"
+        r"|hier klicken|click here"
+        r"|^\s*<>\s*$"                         # bare empty hyperlink artifact
+        r"|_{5,}",                             # separator line (_____)
+        re.IGNORECASE,
+    )
+    lines = raw.splitlines()
+    cut = len(lines)
+    for i, line in enumerate(lines):
+        if _BOILERPLATE.search(line):
+            cut = i
+            break
+    kept = "\n".join(lines[:cut]).strip()
+    if not kept or kept == "Reminder":
+        return None
+    return kept
+
+
+def attendee_domains(attendees):
+    """Extract unique email domains from attendee list, sorted."""
+    domains = set()
+    for email in attendees:
+        if "@" in email:
+            domains.add(email.split("@", 1)[1].lower())
+    return sorted(domains)
 
 
 def format_event(ev):
@@ -276,19 +297,16 @@ def format_event(ev):
     is_private = ev.get("classification") in ("PRIVATE", "CONFIDENTIAL")
 
     return {
-        "uid": ev.get("uid"),
         "title": ev.get("title", "(no title)"),
         "date": format_date(start),
         "start": None if all_day else format_time(start),
         "end": None if all_day else format_time(end),
         "duration_hours": None if all_day else duration_hours(start, end),
-        "all_day": all_day,
         "is_private": is_private,
-        "status": ev.get("status", "CONFIRMED"),
         "location": ev.get("location") or None,
         "description": clean_description(ev.get("description")),
         "organizer": ev.get("organizer") or None,
-        "attendees": ev.get("attendees", []),
+        "attendee_domains": attendee_domains(ev.get("attendees", [])),
         "recurring": ev.get("recurring", False),
     }
 
@@ -373,7 +391,7 @@ def main():
     filtered.sort(key=lambda e: e.get("start") or date.min)
 
     output = [format_event(ev) for ev in filtered]
-    print(json.dumps(output, indent=2, ensure_ascii=False))
+    print(toon_encode(output))
 
     print(
         f"\n[parse-ics] {len(output)} event(s) found between {start_date} and {end_date}",
