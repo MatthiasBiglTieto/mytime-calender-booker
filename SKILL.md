@@ -94,16 +94,16 @@ Run the parser against the locally exported file:
 
 ```bash
 # This week, include private:
-node "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.js" --range this-week
+python "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.py" --range this-week
 
 # This week, skip private:
-node "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.js" --range this-week --skip-private
+python "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.py" --range this-week --skip-private
 
 # Today, skip private:
-node "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.js" --range today --skip-private
+python "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.py" --range today --skip-private
 
 # Custom range, skip private:
-node "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.js" --range custom --start 2026-03-20 --end 2026-03-27 --skip-private
+python "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-ics.py" --range custom --start 2026-03-20 --end 2026-03-27 --skip-private
 ```
 
 The `--range`, `--start`, `--end`, and `--skip-private` flags must match what was passed to the export script.
@@ -358,7 +358,7 @@ The Excel is generated automatically after Step 11 confirmation. If the user req
 ## Requirements
 
 - PowerShell (Windows) — for Outlook COM automation
-- Node.js — for ICS parsing
+- Node.js — no longer required (ICS parser rewritten in Python)
 - Python 3 — for Phase 3 (`book-timecard.py`)
 - `openpyxl` — install with: `pip install openpyxl`
 
@@ -369,7 +369,7 @@ mytime-calender-booker/
   SKILL.md                            ← this file
   scripts/
     export-calendar.ps1               ← Outlook COM export (PowerShell)
-    parse-ics.js                       ← ICS parser and filter (Node.js)
+    parse-ics.py                       ← ICS parser and filter (Python, stdlib)
     parse-projects.py                  ← MyTime HTML → projects.json (Python, stdlib)
     book-timecard.py                   ← Writes pre-mapped events into xlsx template (Python, openpyxl)
   config/
