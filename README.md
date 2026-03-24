@@ -13,6 +13,7 @@ An AI agent skill that automates the full MyTime timecard booking workflow — f
 | Microsoft Outlook | Classic (`OUTLOOK.EXE`) or new (`olk.exe`) — must be installed |
 | Python 3.9+ | [python.org](https://www.python.org/downloads/) |
 | `openpyxl` | `pip install openpyxl` |
+| `toon_format` | `pip install git+https://github.com/toon-format/toon-python.git` |
 
 ---
 
@@ -26,10 +27,11 @@ skills add MatthiasBiglTieto/mytime-calender-booker
 
 During installation, select **Global** scope and **Symlink** method so updates apply automatically.
 
-### 2. Install the Python dependency
+### 2. Install Python dependencies
 
 ```bash
 pip install openpyxl
+pip install git+https://github.com/toon-format/toon-python.git
 ```
 
 ### 3. Set up your MyTime projects (first run only)
@@ -41,7 +43,7 @@ The skill needs a local copy of your MyTime project list to map meetings:
 3. Save the page: **Ctrl+S** → save anywhere (e.g. Desktop)
 4. When the skill asks for your project file, provide the saved path
 
-The skill parses the HTML and caches the result to `%USERPROFILE%\.mytime-booker\projects.json`. You only need to repeat this step when your project assignments change.
+The skill parses the HTML and caches the result to `%USERPROFILE%\.mytime-booker\projects.toon`. You only need to repeat this step when your project assignments change.
 
 ---
 
@@ -73,7 +75,7 @@ Confirmed mappings are written directly to `Downloads\timecard_output.xlsx` in t
 | File | Location | When written |
 |---|---|---|
 | `calendar.ics` | `%USERPROFILE%\.mytime-booker\` | Every export |
-| `projects.json` | `%USERPROFILE%\.mytime-booker\` | First run / when projects change |
+| `projects.toon` | `%USERPROFILE%\.mytime-booker\` | First run / when projects change |
 | `timecard_output.xlsx` | `%USERPROFILE%\Downloads\` | After each confirmed booking |
 
 ---
@@ -87,7 +89,7 @@ mytime-calender-booker/
   scripts/
     export-calendar.ps1      ← Outlook COM export (PowerShell)
     parse-ics.py             ← ICS parser and date filter (Python, stdlib)
-    parse-projects.py        ← MyTime HTML → projects.json (Python, stdlib)
+    parse-projects.py        ← MyTime HTML → projects.toon (Python, toon_format)
     book-timecard.py         ← mappings → timecard.xlsx (Python, openpyxl)
 ```
 

@@ -163,11 +163,11 @@ Prerequisite: `calendar_events` must be in context from Phase 1. Do not start Ph
 
 ### Step 5 — Check if project data is fresh
 
-Check whether `projects.json` exists and read its age in one call:
+Check whether `projects.toon` exists and read its age in one call:
 
 ```powershell
 powershell -Command "
-  $p = \"$env:USERPROFILE\.mytime-booker\projects.json\"
+  $p = \"$env:USERPROFILE\.mytime-booker\projects.toon\"
   if (Test-Path $p) {
     $age = (Get-Date) - (Get-Item $p).LastWriteTime
     $days = [math]::Floor($age.TotalDays)
@@ -181,7 +181,7 @@ powershell -Command "
 - **If a time is returned:** Ask the user:
   > "Your MyTime projects were last refreshed **[age]**. Use cached data or refresh?"
   > (cached / refresh)
-  - **cached:** load `projects.json` directly and skip to Step 7
+  - **cached:** load `projects.toon` directly and skip to Step 7
   - **refresh:** proceed to Step 6
 
 ---
@@ -206,7 +206,7 @@ python "D:\ai\custom-skills\mytime-calender-booker\scripts\parse-projects.py" --
 The script:
 - Reads the saved HTML file
 - Extracts all projects and tasks (name, ID, nickname, active dates)
-- Saves to `%USERPROFILE%\.mytime-booker\projects.json`
+- Saves to `%USERPROFILE%\.mytime-booker\projects.toon`
 - Outputs JSON to stdout
 
 **If the script shows a warning about projects with 0 tasks:** those projects were collapsed in the browser when the page was saved. Tell the user which projects are affected and ask them to re-save the page after expanding those specific projects.
@@ -217,7 +217,7 @@ The script:
 
 Prerequisite: `calendar_events` must be in context from Phase 1.
 
-Read `projects.json` to get the available projects and tasks.
+Read `projects.toon` to get the available projects and tasks.
 
 For each event in `calendar_events`, find the best-matching (project, task) pair using these signals:
 
@@ -338,7 +338,7 @@ The Excel is generated automatically after Step 9 confirmation. If the user requ
 
 **"pick #N":**
 1. Re-open `booking_mappings` in context.
-2. For row N, present the list of available projects and tasks from `projects.json`.
+2. For row N, present the list of available projects and tasks from `projects.toon`.
 3. Let the user choose.
 4. Update the event in `booking_mappings`.
 5. Re-pipe the updated JSON and re-run `book-timecard.py` (same stdin-pipe command as Step 9).
@@ -354,6 +354,7 @@ The Excel is generated automatically after Step 9 confirmation. If the user requ
 - Node.js — no longer required (ICS parser rewritten in Python)
 - Python 3 — for Phase 3 (`book-timecard.py`)
 - `openpyxl` — install with: `pip install openpyxl`
+- `toon_format` — install with: `pip install git+https://github.com/toon-format/toon-python.git`
 
 ## File structure reference
 
@@ -363,7 +364,7 @@ mytime-calender-booker/
   scripts/
     export-calendar.ps1               ← Outlook COM export (PowerShell)
     parse-ics.py                       ← ICS parser and filter (Python, stdlib)
-    parse-projects.py                  ← MyTime HTML → projects.json (Python, stdlib)
+    parse-projects.py                  ← MyTime HTML → projects.toon (Python, toon_format)
     book-timecard.py                   ← Writes pre-mapped events into xlsx template (Python, openpyxl)
 ```
 
@@ -372,5 +373,5 @@ mytime-calender-booker/
 | File | When written | Overwritten on next run |
 |---|---|---|
 | `%USERPROFILE%\.mytime-booker\calendar.ics` | Every Phase 1 export | Yes — always fresh |
-| `%USERPROFILE%\.mytime-booker\projects.json` | When user confirms projects changed | Only when user says "yes" |
+| `%USERPROFILE%\.mytime-booker\projects.toon` | When user confirms projects changed | Only when user says "yes" |
 | `Downloads\timecard_output.xlsx` | After Step 9 confirmation | Yes — overwritten each confirmation |

@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 """
 parse-projects.py
-Parses a saved MyTime /my_projects HTML page into a structured JSON file.
+Parses a saved MyTime /my_projects HTML page into a structured TOON file.
 
 Usage:
     python parse-projects.py --file "C:/path/to/My Time.html"
-    python parse-projects.py --file "C:/path/to/My Time.html" --out "C:/path/to/projects.json"
+    python parse-projects.py --file "C:/path/to/My Time.html" --out "C:/path/to/projects.toon"
 
-The output defaults to %USERPROFILE%/.mytime-booker/projects.json
+The output defaults to %USERPROFILE%/.mytime-booker/projects.toon
 
-Dependencies: Python 3.x (stdlib only, no pip installs)
+Dependencies: Python 3.x + toon_format
+    pip install git+https://github.com/toon-format/toon-python.git
 """
 
 import argparse
-import json
 import os
 import re
 import sys
 from datetime import datetime, timezone
+
+from toon_format import encode as toon_encode
 from html.parser import HTMLParser
 
 
@@ -198,7 +200,7 @@ def parse_html(html_content):
 
 def main():
     arg_parser = argparse.ArgumentParser(
-        description="Parse MyTime /my_projects HTML into structured JSON"
+        description="Parse MyTime /my_projects HTML into structured TOON"
     )
     arg_parser.add_argument(
         "--file",
@@ -210,9 +212,9 @@ def main():
         default=os.path.join(
             os.environ.get("USERPROFILE", os.environ.get("HOME", ".")),
             ".mytime-booker",
-            "projects.json",
+            "projects.toon",
         ),
-        help="Output path for projects.json (default: ~/.mytime-booker/projects.json)",
+        help="Output path for projects.toon (default: ~/.mytime-booker/projects.toon)",
     )
     args = arg_parser.parse_args()
 
@@ -244,14 +246,18 @@ def main():
         "projects": projects,
     }
 
+    # Encode to TOON
+    toon_output = toon_encode(output)
+
     # Ensure output directory exists
     out_dir = os.path.dirname(args.out)
     if out_dir and not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
-    # Write JSON
+    # Write TOON
     with open(args.out, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
+        f.write(toon_output)
+        f.write("\n")
 
     # Summary to stderr
     print(f"[parse-projects] Parsed {len(projects)} projects with {total_tasks} tasks", file=sys.stderr)
@@ -263,9 +269,9 @@ def main():
         for p in projects_without_tasks:
             print(f"  - {p['name']} (id: {p['id']})", file=sys.stderr)
 
-    # Also print JSON to stdout (use errors=replace to handle any remaining unicode)
-    sys.stdout.buffer.write(json.dumps(output, indent=2, ensure_ascii=False).encode("utf-8"))
-    sys.stdout.buffer.write(b"\n")
+    # Also print TOON to stdout
+    sys.stdout.write(toon_output)
+    sys.stdout.write("\n")
 
 
 if __name__ == "__main__":
