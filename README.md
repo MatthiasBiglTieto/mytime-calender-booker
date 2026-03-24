@@ -58,7 +58,7 @@ Trigger the skill by talking to your AI agent naturally:
 The skill walks you through three phases:
 
 **Phase 1 — Calendar export**
-Connects to Outlook via COM (no browser, no MFA), exports your calendar, and presents meetings for review. You choose the time range (this week / today / custom) and whether to skip private events.
+Connects to Outlook via COM (no browser, no MFA), exports your calendar, and presents meetings for review. Defaults to **this week, skip private** — just confirm or say "today", "custom range", or "include private" to adjust.
 
 **Phase 2 — Project/task mapping**
 AI maps each meeting to a MyTime project and task using email domains, attendee lists, keywords, and naming conventions. You review the table and can override any mapping before confirming.

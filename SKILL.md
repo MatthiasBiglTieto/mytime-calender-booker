@@ -22,21 +22,20 @@ Three phases, all implemented:
 
 ## Phase 1: Calendar Data Gathering
 
-### Step 1 — Ask the user for filter preferences
+### Step 1 — Confirm filter preferences with a smart default
 
-Ask both questions at once, do not ask separately:
+Lead with an assumed default to minimise round-trips:
 
-**Question 1 — Time range:**
-> "Which time range would you like to fetch?
-> (1) This week  (2) Today  (3) Custom — I'll specify start and end dates"
+> "I'll fetch **this week's** calendar and **skip private meetings** — does that work?
+> Or say: **today** / **custom range** / **include private**"
 
-**Question 2 — Private meetings:**
-> "Should I skip private meetings? (yes / no)"
+Wait for the user's reply before proceeding.
 
-Wait for both answers before proceeding.
-
-If the user chose custom range, ask:
-> "Please provide the start date and end date (format: YYYY-MM-DD)."
+- If the user says **ok / yes / sure** (or anything that confirms): use this week, skip private.
+- If the user says **today**: use today's date, skip private (unless they add "include private").
+- If the user says **custom range**: ask for start and end dates (format: YYYY-MM-DD), then proceed.
+- If the user says **include private**: use this week but include all events.
+- If the user says **today include private** or any combination: apply both.
 
 Once you have the answers, calculate concrete `StartDate` and `EndDate` strings (YYYY-MM-DD):
 - **This week:** Monday of current week → Sunday of current week
@@ -45,20 +44,7 @@ Once you have the answers, calculate concrete `StartDate` and `EndDate` strings 
 
 ---
 
-### Step 2 — Check Outlook is accessible
-
-Check whether Outlook is running:
-
-```bash
-powershell -Command "if ((Get-Process OUTLOOK -ErrorAction SilentlyContinue) -or (Get-Process olk -ErrorAction SilentlyContinue)) { 'running' } else { 'not running' }"
-```
-
-- If `running`: proceed directly to Step 3.
-- If `not running`: tell the user "Outlook isn't running — starting it now..." then proceed to Step 3. The export script handles starting it automatically (supports both classic `OUTLOOK.EXE` and new Outlook `olk.exe`).
-
----
-
-### Step 3 — Export the calendar from Outlook
+### Step 2 — Export the calendar from Outlook
 
 Run the export script with the calculated date range. Build the command based on user's answers:
 
@@ -77,20 +63,18 @@ powershell -ExecutionPolicy Bypass -File "D:\ai\custom-skills\mytime-calender-bo
 ```
 
 The script:
-- Attaches to the running Outlook instance via COM (or starts Outlook if not running, then waits up to 60s)
+- Attaches to the running Outlook instance via COM, or starts it automatically if not running — no pre-check needed (handles both classic `OUTLOOK.EXE` and new `olk.exe`)
 - Exports the calendar to `%USERPROFILE%\.mytime-booker\calendar.ics`
 - Outputs progress to stdout so you can see what's happening
 
 If the script fails:
 - `Could not find Outlook` → Outlook is not installed at the expected path. Ask the user to open Outlook manually and try again.
 - `Export failed` → Show the error and ask the user to try again.
-- `did not become ready within 60 seconds` → Outlook is taking too long to start. Ask the user to open Outlook manually, wait for it to fully load, then retry from Step 3.
+- `did not become ready within 60 seconds` → Outlook is taking too long to start. Ask the user to open Outlook manually, wait for it to fully load, then retry from Step 2.
 
----
+**Immediately after the export succeeds** (no user interaction needed), run the parser in the same agent turn:
 
-### Step 4 — Parse and filter the exported ICS
-
-Run the parser against the locally exported file:
+#### Step 2b — Parse and filter the exported ICS
 
 ```bash
 # This week, include private:
@@ -115,13 +99,13 @@ The parser output is a JSON array. Each event contains:
 
 **Note on descriptions:** Outlook writes two `DESCRIPTION` fields per event (real body first, then `"Reminder"`). The parser automatically keeps the longer/real one. If an event has no meaningful body, `description` will be `"Reminder"` or `null`.
 
-If the script exits with an error:
-- `ICS file not found` → the export script did not run or failed silently. Go back to Step 3.
+If the parse script exits with an error:
+- `ICS file not found` → the export script did not run or failed silently. Retry from Step 2a.
 - Any other error → show the error message and ask the user how to proceed.
 
 ---
 
-### Step 5 — Present events for review
+### Step 3 — Present events for review
 
 Parse the JSON output and present it as a clean, readable table. Include a short description preview (first 60 chars) where available:
 
@@ -144,20 +128,21 @@ Rules for the description column:
 
 Then say:
 > "Please review the list above. You can:
-> - Say **ok** to confirm and hold these events for the next step
+> - Say **ok** to confirm and proceed to project mapping
 > - Say **remove #N** to exclude a specific event
 > - Say **change range** to re-fetch with a different date range
 > - Say **stop** to end here"
 
 ---
 
-### Step 6 — Handle user review actions
+### Step 4 — Handle user review actions
 
 **If user says "ok" or "confirm":**
-Store the final filtered event list in context as `calendar_events`. The full JSON including `description` fields is available and will be used in Phase 2 to intelligently map events to MyTime projects and tasks. Tell the user:
-> "Got it. I have [N] event(s) confirmed and ready. When you're ready to proceed to MyTime booking, just say the word — we'll handle project and task mapping in the next phase."
+Store the final filtered event list in context as `calendar_events`. The full JSON including `description` fields is available and will be used in Phase 2. Immediately offer to continue:
+> "Got it — [N] event(s) confirmed. **Ready to map them to MyTime projects now?** (yes / not yet)"
 
-Do not proceed to Phase 2. Stop here and wait.
+- If the user says **yes**: proceed directly to Phase 2 (Step 5).
+- If the user says **not yet / later**: stop and wait.
 
 **If user says "remove #N":**
 Remove the specified event(s) from the list, show the updated table, and ask for confirmation again.
@@ -176,24 +161,32 @@ Prerequisite: `calendar_events` must be in context from Phase 1. Do not start Ph
 
 ---
 
-### Step 7 — Check if project data is fresh
+### Step 5 — Check if project data is fresh
 
-Check whether `projects.json` exists:
+Check whether `projects.json` exists and read its age in one call:
 
-```bash
-powershell -Command "Test-Path \"$env:USERPROFILE\.mytime-booker\projects.json\""
+```powershell
+powershell -Command "
+  $p = \"$env:USERPROFILE\.mytime-booker\projects.json\"
+  if (Test-Path $p) {
+    $age = (Get-Date) - (Get-Item $p).LastWriteTime
+    $days = [math]::Floor($age.TotalDays)
+    $hours = [math]::Floor($age.TotalHours)
+    if ($days -ge 1) { \"$days day(s) ago\" } else { \"$hours hour(s) ago\" }
+  } else { 'not found' }
+"
 ```
 
-Ask the user:
-> "Have your MyTime projects changed since the last run? (yes / no)"
-
-- **If `projects.json` does not exist:** treat as "yes" (first run / no cached data)
-- **If user says "no":** load `projects.json` directly and skip to Step 9
-- **If user says "yes":** proceed to Step 8
+- **If `not found`:** treat as "yes, refresh" (first run). Skip the question and proceed directly to Step 6.
+- **If a time is returned:** Ask the user:
+  > "Your MyTime projects were last refreshed **[age]**. Use cached data or refresh?"
+  > (cached / refresh)
+  - **cached:** load `projects.json` directly and skip to Step 7
+  - **refresh:** proceed to Step 6
 
 ---
 
-### Step 8 — Collect fresh MyTime projects
+### Step 6 — Collect fresh MyTime projects
 
 The MyTime `/my_projects` page requires JavaScript to load all tasks. The most reliable approach is a one-time HTML export.
 
@@ -220,7 +213,7 @@ The script:
 
 ---
 
-### Step 9 — Map calendar events to MyTime projects and tasks
+### Step 7 — Map calendar events to MyTime projects and tasks
 
 Prerequisite: `calendar_events` must be in context from Phase 1.
 
@@ -269,7 +262,7 @@ If no confident match is found, leave the event unmapped and let the user choose
 
 ---
 
-### Step 10 — Present mapping for review
+### Step 8 — Present mapping for review
 
 Present all mappings as a table:
 
@@ -296,7 +289,7 @@ Then say:
 
 ---
 
-### Step 11 — Handle mapping review actions
+### Step 9 — Handle mapping review actions
 
 **If user says "ok" or "confirm":**
 
@@ -339,16 +332,16 @@ Remove the event from the mapping list. Show the updated table. Ask for confirma
 
 ## Phase 3: Final Timecard Review
 
-The Excel is generated automatically after Step 11 confirmation. If the user requests changes via **pick #N** or **skip #N**:
+The Excel is generated automatically after Step 9 confirmation. If the user requests changes via **pick #N** or **skip #N**:
 
-### Step 12 — Handle post-generation adjustments
+### Step 10 — Handle post-generation adjustments
 
 **"pick #N":**
 1. Re-open `booking_mappings` in context.
 2. For row N, present the list of available projects and tasks from `projects.json`.
 3. Let the user choose.
 4. Update the event in `booking_mappings`.
-5. Re-pipe the updated JSON and re-run `book-timecard.py` (same stdin-pipe command as Step 11).
+5. Re-pipe the updated JSON and re-run `book-timecard.py` (same stdin-pipe command as Step 9).
 6. Show the updated output.
 
 **"skip #N":** Remove the row from `booking_mappings`, re-pipe JSON, re-run `book-timecard.py`, show updated output.
@@ -380,4 +373,4 @@ mytime-calender-booker/
 |---|---|---|
 | `%USERPROFILE%\.mytime-booker\calendar.ics` | Every Phase 1 export | Yes — always fresh |
 | `%USERPROFILE%\.mytime-booker\projects.json` | When user confirms projects changed | Only when user says "yes" |
-| `Downloads\timecard_output.xlsx` | After Step 11 confirmation | Yes — overwritten each confirmation |
+| `Downloads\timecard_output.xlsx` | After Step 9 confirmation | Yes — overwritten each confirmation |
