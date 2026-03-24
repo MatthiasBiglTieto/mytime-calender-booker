@@ -115,9 +115,4 @@ Some projects were collapsed when you saved the page. Re-open MyTime, expand tho
 **Excel not opening in MyTime**
 Verify the column order matches exactly what MyTime expects: Project number, Project name, Task number, Task name, Type, Date, Hours, Comment, Time from, Time to.
 
----
-
-## License
-
-MIT
 
