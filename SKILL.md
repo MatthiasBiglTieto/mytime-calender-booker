@@ -372,8 +372,6 @@ mytime-calender-booker/
     parse-ics.py                       ← ICS parser and filter (Python, stdlib)
     parse-projects.py                  ← MyTime HTML → projects.json (Python, stdlib)
     book-timecard.py                   ← Writes pre-mapped events into xlsx template (Python, openpyxl)
-  config/
-    config.example.json               ← optional config template
 ```
 
 ## Output files

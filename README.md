@@ -89,8 +89,6 @@ mytime-calender-booker/
     parse-ics.py             ← ICS parser and date filter (Python, stdlib)
     parse-projects.py        ← MyTime HTML → projects.json (Python, stdlib)
     book-timecard.py         ← mappings → timecard.xlsx (Python, openpyxl)
-  config/
-    config.example.json      ← optional config template
 ```
 
 ---
