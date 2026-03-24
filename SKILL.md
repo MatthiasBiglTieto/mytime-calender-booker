@@ -124,6 +124,14 @@ Rules for the description column:
 - Otherwise show first 60 characters followed by `...` if truncated
 - Strip any remaining `\n` in the preview (replace with space)
 
+**Personal event detection:** After presenting the table, scan for events that look like personal/non-work appointments. Flag any event where ALL of the following are true:
+- `organizer` is null
+- `attendee_domains` is empty
+- `location` is null or not a meeting URL (no "teams", "zoom", "meet", etc.)
+
+If any are found, proactively call them out and suggest removal:
+> "Events #N, #M look like personal appointments (no organizer, no attendees, no meeting link) — want me to remove them?"
+
 Then say:
 > "Please review the list above. You can:
 > - Say **ok** to confirm and proceed to project mapping
@@ -161,25 +169,18 @@ Prerequisite: `calendar_events` must be in context from Phase 1. Do not start Ph
 
 ### Step 5 — Check if project data is fresh
 
-Check whether `projects.toon` exists and read its age in one call:
+Check whether `projects.toon` exists and read its age. Use this PowerShell command — note `[System.Environment]::GetFolderPath('UserProfile')` instead of `$env:USERPROFILE` to avoid bash eating the `$`:
 
 ```powershell
-powershell -Command "
-  $p = \"$env:USERPROFILE\.mytime-booker\projects.toon\"
-  if (Test-Path $p) {
-    $age = (Get-Date) - (Get-Item $p).LastWriteTime
-    $days = [math]::Floor($age.TotalDays)
-    $hours = [math]::Floor($age.TotalHours)
-    if ($days -ge 1) { \"$days day(s) ago\" } else { \"$hours hour(s) ago\" }
-  } else { 'not found' }
-"
+powershell -ExecutionPolicy Bypass -Command "& { \$p = [System.Environment]::GetFolderPath('UserProfile') + '\.mytime-booker\projects.toon'; if (Test-Path \$p) { \$age = (Get-Date) - (Get-Item \$p).LastWriteTime; \$days = [math]::Floor(\$age.TotalDays); \$hours = [math]::Floor(\$age.TotalHours); if (\$days -ge 1) { Write-Output (\$days.ToString() + ' day(s) ago') } else { Write-Output (\$hours.ToString() + ' hour(s) ago') } } else { Write-Output 'not found' } }"
 ```
 
-- **If `not found`:** treat as "yes, refresh" (first run). Skip the question and proceed directly to Step 6.
-- **If a time is returned:** Ask the user:
+- **If `not found`:** treat as first run — proceed directly to Step 6.
+- **If the command itself errors** (e.g. execution policy, quoting issue): fall back to reading the file with the `Read` tool at the path returned by: `powershell -ExecutionPolicy Bypass -Command "Write-Output ([System.Environment]::GetFolderPath('UserProfile') + '\.mytime-booker\projects.toon')"`. If the Read succeeds, check the `scraped_at` field for age. If it fails, treat as not found.
+- **If an age is returned:** Ask the user:
   > "Your MyTime projects were last refreshed **[age]**. Use cached data or refresh?"
   > (cached / refresh)
-  - **cached:** load `projects.toon` directly and skip to Step 7
+  - **cached:** read `projects.toon` with the `Read` tool and proceed to Step 7
   - **refresh:** proceed to Step 6
 
 ---
@@ -291,17 +292,33 @@ Then say:
 
 **If user says "ok" or "confirm":**
 
-1. **Generate the Excel immediately** by piping the confirmed mappings as TOON directly to the script — no intermediate file needed. Build a TOON array from `booking_mappings` with these fields per event: `title`, `date`, `start`, `end`, `duration_hours`, `project_id`, `project_name`, `task_id`, `task_name`. **Do not include events that were skipped.**
+1. **Generate the Excel immediately** using the `Write` tool + `--events` flag. Two steps:
 
+**Step A — get the user's profile path:**
 ```powershell
-$toon = @'
-[1]{title,date,start,end,duration_hours,project_id,project_name,task_id,task_name}:
-  Team Sync,2026-03-24,"09:00","10:00",1.0,"12345",Customer Project A,"01",Development
-'@
-$toon | python "D:\ai\custom-skills\mytime-calender-booker\scripts\book-timecard.py" --output "$env:USERPROFILE\Downloads\timecard_output.xlsx"
+powershell -ExecutionPolicy Bypass -Command "Write-Output ([System.Environment]::GetFolderPath('UserProfile'))"
 ```
 
-Replace the example row(s) with the actual confirmed events. Each event is one comma-separated line after the header. Wrap values in quotes only when they contain commas or spaces (e.g. times like `"09:00"`, IDs that might be purely numeric like `"12345"`).
+**Step B — write `bookings.csv`** using the `Write` tool at `<USERPROFILE>\.mytime-booker\bookings.csv`.
+
+The CSV has exactly 10 columns matching the timecard template. Do not include skipped events. Pre-split project and task names before writing — strip the leading number prefix:
+- `"295189 - BAW-CC-Cloud-OU216"` → `project_number=295189`, `project_name=BAW-CC-Cloud-OU216`
+- `"61.2 - Cloud support"` → `task_number=61.2`, `task_name=Cloud support`
+
+`type` is always `Normal -AT` for regular meetings. Example:
+
+```csv
+project_number,project_name,task_number,task_name,type,date,hours,comment,time_from,time_to
+295189,BAW-CC-Cloud-OU216,61.2,Cloud support,Normal -AT,2026-03-24,1.0,Team Sync,09:00,10:00
+291648,CE COMPDevActive Deliv. OU216,07,Chapter Work,Normal -AT,2026-03-26,1.0,Weekly WebDev 2026,14:00,15:00
+```
+
+**Step C — run the script:**
+```powershell
+python "D:\ai\custom-skills\mytime-calender-booker\scripts\book-timecard.py" --events "<USERPROFILE>\.mytime-booker\bookings.csv" --output "<USERPROFILE>\Downloads\timecard_output.xlsx"
+```
+
+Replace `<USERPROFILE>` with the actual path from Step A. No pipe needed.
 
 2. **Present the output** (OK/UNMAPPED rows) as reported by the script and tell the user:
 > "Your timecard has been saved to `Downloads\timecard_output.xlsx` — ready to upload to MyTime. If anything needs adjusting, say **pick #N** to remap an event or **skip #N** to remove one."
@@ -328,20 +345,19 @@ The Excel is generated automatically after Step 9 confirmation. If the user requ
 2. For row N, present the list of available projects and tasks from `projects.toon`.
 3. Let the user choose.
 4. Update the event in `booking_mappings`.
-5. Re-pipe the updated TOON and re-run `book-timecard.py` (same stdin-pipe command as Step 9).
+5. Re-write the updated `bookings.csv` using the `Write` tool and re-run `book-timecard.py` with the same `--events` flag as Step 9.
 6. Show the updated output.
 
-**"skip #N":** Remove the row from `booking_mappings`, re-pipe JSON, re-run `book-timecard.py`, show updated output.
+**"skip #N":** Remove the row from `booking_mappings`, re-write `bookings.csv`, re-run `book-timecard.py`, show updated output.
 
 ---
 
 ## Requirements
 
 - PowerShell (Windows) — for Outlook COM automation
-- Node.js — no longer required (ICS parser rewritten in Python)
-- Python 3 — for Phase 3 (`book-timecard.py`)
+- Python 3 — for all scripts
 - `openpyxl` — install with: `pip install openpyxl`
-- `toon_format` — install with: `pip install git+https://github.com/toon-format/toon-python.git`
+- `toon_format` — install with: `pip install git+https://github.com/toon-format/toon-python.git` (used by `parse-ics.py` and `parse-projects.py` only)
 
 ## File structure reference
 
@@ -361,4 +377,5 @@ mytime-calender-booker/
 |---|---|---|
 | `%USERPROFILE%\.mytime-booker\calendar.ics` | Every Phase 1 export | Yes — always fresh |
 | `%USERPROFILE%\.mytime-booker\projects.toon` | When user confirms projects changed | Only when user says "yes" |
+| `%USERPROFILE%\.mytime-booker\bookings.csv` | After Step 9 confirmation | Yes — overwritten each confirmation |
 | `Downloads\timecard_output.xlsx` | After Step 9 confirmation | Yes — overwritten each confirmation |
