@@ -1,11 +1,11 @@
 import argparse
-import json
 import os
 import re
 import sys
 from datetime import datetime
 
 import openpyxl
+from toon_format import decode as toon_decode
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
@@ -15,9 +15,9 @@ DEFAULT_OUTPUT = os.path.join(os.path.expanduser("~"), "Downloads", "timecard_ou
 TYPE_DEFAULT = "Normal -AT"
 
 
-def load_events_from_json(json_path):
-    with open(json_path) as f:
-        return json.load(f)
+def load_events_from_toon(toon_path):
+    with open(toon_path) as f:
+        return toon_decode(f.read())
 
 
 def build_booking_rows(events):
@@ -113,7 +113,7 @@ def save_timecard(rows, output_path, template_path=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Write pre-mapped calendar events into a MyTime timecard xlsx")
-    parser.add_argument("--events", default=None, help="Path to JSON file with confirmed, pre-mapped calendar events (omit to read from stdin)")
+    parser.add_argument("--events", default=None, help="Path to TOON file with confirmed, pre-mapped calendar events (omit to read from stdin)")
     parser.add_argument("--template", default=TEMPLATE_PATH, help="Path to the blank template xlsx")
     parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Output path for the filled xlsx")
     args = parser.parse_args()
@@ -122,9 +122,9 @@ def main():
         if not os.path.exists(args.events):
             print(f"[book-timecard] ERROR: events file not found: {args.events}")
             sys.exit(1)
-        events = load_events_from_json(args.events)
+        events = load_events_from_toon(args.events)
     else:
-        events = json.load(sys.stdin)
+        events = toon_decode(sys.stdin.read())
     print(f"[book-timecard] Loaded {len(events)} events")
 
     rows = build_booking_rows(events)

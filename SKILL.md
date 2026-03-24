@@ -291,28 +291,17 @@ Then say:
 
 **If user says "ok" or "confirm":**
 
-1. **Generate the Excel immediately** by piping the confirmed mappings as JSON directly to the script — no intermediate file needed. Build a JSON array from `booking_mappings` with these fields per event: `title`, `date`, `start`, `end`, `duration_hours`, `project_id`, `project_name`, `task_id`, `task_name`. **Do not include events that were skipped.**
+1. **Generate the Excel immediately** by piping the confirmed mappings as TOON directly to the script — no intermediate file needed. Build a TOON array from `booking_mappings` with these fields per event: `title`, `date`, `start`, `end`, `duration_hours`, `project_id`, `project_name`, `task_id`, `task_name`. **Do not include events that were skipped.**
 
 ```powershell
-$json = @'
-[
-  {
-    "title": "Team Sync",
-    "date": "2026-03-24",
-    "start": "09:00",
-    "end": "10:00",
-    "duration_hours": 1.0,
-    "project_id": "12345",
-    "project_name": "Customer Project A",
-    "task_id": "01",
-    "task_name": "Development"
-  }
-]
+$toon = @'
+[1]{title,date,start,end,duration_hours,project_id,project_name,task_id,task_name}:
+  Team Sync,2026-03-24,"09:00","10:00",1.0,"12345",Customer Project A,"01",Development
 '@
-$json | python "D:\ai\custom-skills\mytime-calender-booker\scripts\book-timecard.py" --output "$env:USERPROFILE\Downloads\timecard_output.xlsx"
+$toon | python "D:\ai\custom-skills\mytime-calender-booker\scripts\book-timecard.py" --output "$env:USERPROFILE\Downloads\timecard_output.xlsx"
 ```
 
-Replace the example with the actual confirmed events.
+Replace the example row(s) with the actual confirmed events. Each event is one comma-separated line after the header. Wrap values in quotes only when they contain commas or spaces (e.g. times like `"09:00"`, IDs that might be purely numeric like `"12345"`).
 
 2. **Present the output** (OK/UNMAPPED rows) as reported by the script and tell the user:
 > "Your timecard has been saved to `Downloads\timecard_output.xlsx` — ready to upload to MyTime. If anything needs adjusting, say **pick #N** to remap an event or **skip #N** to remove one."
@@ -339,7 +328,7 @@ The Excel is generated automatically after Step 9 confirmation. If the user requ
 2. For row N, present the list of available projects and tasks from `projects.toon`.
 3. Let the user choose.
 4. Update the event in `booking_mappings`.
-5. Re-pipe the updated JSON and re-run `book-timecard.py` (same stdin-pipe command as Step 9).
+5. Re-pipe the updated TOON and re-run `book-timecard.py` (same stdin-pipe command as Step 9).
 6. Show the updated output.
 
 **"skip #N":** Remove the row from `booking_mappings`, re-pipe JSON, re-run `book-timecard.py`, show updated output.
