@@ -391,12 +391,12 @@ def main():
     filtered.sort(key=lambda e: e.get("start") or date.min)
 
     output = [format_event(ev) for ev in filtered]
-    print(toon_encode(output))
 
     print(
-        f"\n[parse-ics] {len(output)} event(s) found between {start_date} and {end_date}",
+        f"[parse-ics] {len(output)} event(s) found between {start_date} and {end_date}",
         file=sys.stderr
     )
+    print(toon_encode(output), flush=True)
 
 
 if __name__ == "__main__":
