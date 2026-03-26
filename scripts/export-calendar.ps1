@@ -81,13 +81,13 @@ function Get-OutlookCOM {
     }
 
     # Neither is running — start whichever is installed
-    Write-Host "[export-calendar] Outlook is not running. Starting it..."
+    Write-Host "[export-calendar] Outlook is not running. Starting it (preferring new Outlook)..."
 
     $exeToStart = $null
-    if (Test-Path $classicExe) {
-        $exeToStart = $classicExe
-    } elseif (Test-Path $modernExe) {
+    if (Test-Path $modernExe) {
         $exeToStart = $modernExe
+    } elseif (Test-Path $classicExe) {
+        $exeToStart = $classicExe
     } else {
         # Fallback: registry lookup for classic Outlook
         try {

@@ -5,18 +5,21 @@ description: Full end-to-end MyTime time-booking automation for Outlook users. F
 
 # mytime-calender-booker
 
-End-to-end automation for booking Outlook calendar meetings into MyTime:
-1. Fetch and review Outlook calendar events (PowerShell COM — no browser, no MFA)
-2. Load MyTime projects and map each event to a project/task pair using AI reasoning
-3. Generate a filled Excel timecard automatically as soon as mappings are confirmed
+Windows-only. Requires Outlook (prefers new Outlook / olk.exe). All scripts handle their own path resolution — do not hardcode user home paths.
 
-## Overview
+**Path convention:** `~` means the user's home directory throughout this document. When you need the actual absolute path (e.g. for the Write tool), resolve it with `python -c "import os; print(os.path.expanduser('~'))"`. Skill script paths use `$HOME/.agents/skills/...` which expands correctly in the PowerShell terminal.
 
-Three phases, all implemented:
+**Workflow:** Phase 1 (calendar export) → Phase 2 (project mapping) → Phase 3 (Excel generation). Follow steps in order, but if the user says they already have data from earlier phases, check for existing files and skip ahead.
 
-- **Phase 1:** Export calendar from Outlook → filter → present for review
-- **Phase 2:** Load MyTime projects → agent maps events to project/task pairs → user confirms
-- **Phase 3:** Mappings piped directly to Excel generator → file ready immediately
+## Step 0 — Check dependencies
+
+Before starting any phase, verify that required Python packages are installed. Run this once per session:
+
+```bash
+pip install openpyxl 2>nul && python -c "import toon_format" 2>nul || pip install git+https://github.com/toon-format/toon-python.git
+```
+
+If either install fails, tell the user what went wrong and stop.
 
 ---
 
@@ -64,7 +67,7 @@ powershell -ExecutionPolicy Bypass -File "$HOME/.agents/skills/mytime-calender-b
 
 The script:
 - Attaches to the running Outlook instance via COM, or starts it automatically if not running — no pre-check needed (handles both classic `OUTLOOK.EXE` and new `olk.exe`)
-- Exports the calendar to `%USERPROFILE%\.mytime-booker\calendar.ics`
+- Exports the calendar to `~\.mytime-booker\calendar.ics`
 - Outputs progress to stdout so you can see what's happening
 
 If the script fails:
@@ -72,9 +75,9 @@ If the script fails:
 - `Export failed` → Show the error and ask the user to try again.
 - `did not become ready within 60 seconds` → Outlook is taking too long to start. Ask the user to open Outlook manually, wait for it to fully load, then retry from Step 2.
 
-**Immediately after the export succeeds** (no user interaction needed), run the parser in the same agent turn:
+### Step 2b — Parse and filter the exported ICS
 
-#### Step 2b — Parse and filter the exported ICS
+Run this command in the SAME turn as Step 2 — do not wait for user input between export and parse, because the user already confirmed their preferences and there is nothing new to ask.
 
 ```bash
 # This week, include private:
@@ -92,13 +95,13 @@ python "$HOME/.agents/skills/mytime-calender-booker/scripts/parse-ics.py" --rang
 
 The `--range`, `--start`, `--end`, and `--skip-private` flags must match what was passed to the export script.
 
-The parser output is a TOON array. Each event contains:
+The parser output is a TOON array (a JSON-compatible text format — read it as JSON). Each event contains:
 - `title`, `date`, `start`, `end`, `duration_hours` — core scheduling fields
 - `description` — the actual meeting body text, truncated at the first Teams/phone boilerplate line (meeting IDs, dial-in numbers, etc.) so legal disclaimers are never included. If no meaningful content remains, `description` will be `null`.
-- `is_private`, `location`, `organizer`, `attendee_domains` (unique email domains of attendees, e.g. `["bawaggroup.com", "tieto.com"]`), `recurring`
+- `is_private`, `location`, `organizer`, `attendee_domains` (unique email domains of attendees, e.g. `["acme-corp.com", "contoso.com"]`), `recurring`
 
 If the parse script exits with an error:
-- `ICS file not found` → the export script did not run or failed silently. Retry from Step 2a.
+- `ICS file not found` → the export script did not run or failed silently. Retry from Step 2.
 - Any other error → show the error message and ask the user how to proceed.
 
 ---
@@ -128,9 +131,13 @@ Rules for the description column:
 - `organizer` is null
 - `attendee_domains` is empty
 - `location` is null or not a meeting URL (no "teams", "zoom", "meet", etc.)
+- Title does NOT contain work-related terms like 'focus time', 'blocked', 'prep', 'no meeting', or 'lunch'
 
 If any are found, proactively call them out and suggest removal:
 > "Events #N, #M look like personal appointments (no organizer, no attendees, no meeting link) — want me to remove them?"
+
+**All-day events:** Events like holidays, out-of-office, or all-day blocks typically should not be booked to projects. Proactively suggest skipping them:
+> "Event #N is an all-day event ([title]) — want me to skip it for booking?"
 
 Then say:
 > "Please review the list above. You can:
@@ -144,7 +151,7 @@ Then say:
 ### Step 4 — Handle user review actions
 
 **If user says "ok" or "confirm":**
-Store the final filtered event list in context as `calendar_events`. The full JSON including `description` fields is available and will be used in Phase 2. Immediately offer to continue:
+The confirmed event list (full JSON including descriptions) carries forward into Phase 2 for mapping. Immediately offer to continue:
 > "Got it — [N] event(s) confirmed. **Ready to map them to MyTime projects now?** (yes / not yet)"
 
 - If the user says **yes**: proceed directly to Phase 2 (Step 5).
@@ -163,7 +170,7 @@ Go back to Step 1.
 
 ## Phase 2: MyTime Project/Task Mapping
 
-Prerequisite: `calendar_events` must be in context from Phase 1. Do not start Phase 2 unless the user has confirmed their calendar events.
+Prerequisite: the user must have confirmed their calendar events in Phase 1 before starting Phase 2.
 
 ---
 
@@ -179,7 +186,7 @@ python -c "import os, pathlib, datetime; p = pathlib.Path(os.path.expanduser('~'
 - **If an age is returned:** Ask the user:
   > "Your MyTime projects were last refreshed **[age]**. Use cached data or refresh?"
   > (cached / refresh)
-  - **cached:** read `projects.toon` with the `Read` tool at `~/.mytime-booker/projects.toon` (use `python -c "import os; print(os.path.expanduser('~'))"` to get the absolute home path if needed) and proceed to Step 7
+  - **cached:** read `projects.toon` with the Read tool at `~\.mytime-booker\projects.toon` (resolve the absolute home path with `python -c "import os; print(os.path.expanduser('~'))"` if needed) and proceed to Step 7
   - **refresh:** proceed to Step 6
 
 ---
@@ -204,7 +211,7 @@ python "$HOME/.agents/skills/mytime-calender-booker/scripts/parse-projects.py" -
 The script:
 - Reads the saved HTML file
 - Extracts all projects and tasks (name, ID, nickname, active dates)
-- Saves to `%USERPROFILE%\.mytime-booker\projects.toon`
+- Saves to `~\.mytime-booker\projects.toon`
 - Outputs JSON to stdout
 
 **If the script shows a warning about projects with 0 tasks:** those projects were collapsed in the browser when the page was saved. Tell the user which projects are affected and ask them to re-save the page after expanding those specific projects.
@@ -213,11 +220,11 @@ The script:
 
 ### Step 7 — Map calendar events to MyTime projects and tasks
 
-Prerequisite: `calendar_events` must be in context from Phase 1.
-
 Read `projects.toon` to get the available projects and tasks.
 
-For each event in `calendar_events`, find the best-matching (project, task) pair using these signals:
+For each confirmed event from Phase 1, find the best-matching (project, task) pair using these signals:
+
+**Priority order: 1 > 2 > 3 > 4 > 5 > 6.** When signals conflict, the higher-numbered signal loses. Domain match is the strongest differentiator.
 
 #### Signal 1 — Email domain match (strongest)
 
@@ -242,7 +249,7 @@ If the event `description` mentions a numeric project code (e.g. "project 12345"
 #### Signal 5 — Naming conventions and abbreviations
 
 Look at how project and task names are structured and use that to reason about matches:
-- A project named `BAW-something` or containing "BAW" likely maps to events that mention "BAWAG" or "bawaggroup"
+- A project named `ACM-something` or containing "ACM" likely maps to events that mention "Acme" or "acme-corp"
 - A task named "Cloud Support" likely matches stand-up, Wartung, or maintenance meetings
 - A project/task containing "chapter" or "chapter work" likely matches chapter or webdev meetings
 - A task named "Training" or "Competence" likely matches Copilot, GitHub Copilot, or AI-agent meetings
@@ -291,29 +298,23 @@ Then say:
 
 **If user says "ok" or "confirm":**
 
-1. **Generate the Excel immediately** using the `Write` tool + the script defaults. Three steps:
+1. **Generate the Excel immediately** using the `Write` tool + the script defaults. Two steps:
 
-**Step A — get the home path** (needed for the Write tool):
-```bash
-python -c "import os; print(os.path.expanduser('~'))"
-```
-This prints e.g. `C:\Users\MatthiasBigl`. Use that path in Step B.
+**Step A — write `bookings.csv`:** Use the Write tool to create the file at `~\.mytime-booker\bookings.csv`. To get the absolute path, run `python -c "import os; print(os.path.expanduser('~'))"` first.
 
-**Step B — write `bookings.csv`** using the `Write` tool at `<home>\.mytime-booker\bookings.csv`.
-
-The CSV has exactly 10 columns matching the timecard template. Do not include skipped events. Pre-split project and task names before writing — strip the leading number prefix:
-- `"295189 - BAW-CC-Cloud-OU216"` → `project_number=295189`, `project_name=BAW-CC-Cloud-OU216`
+The CSV has exactly 10 columns matching the timecard template. Do not include skipped events. Pre-split project and task names before writing. Split on the FIRST ` - ` (space-dash-space) only, because names like `"ACM-CC-Cloud-Ops"` contain extra dashes that are part of the name. Everything before the first ` - ` is the number, everything after is the name:
+- `"295189 - ACM-CC-Cloud-Ops"` → `project_number=295189`, `project_name=ACM-CC-Cloud-Ops`
 - `"61.2 - Cloud support"` → `task_number=61.2`, `task_name=Cloud support`
 
 `type` is always `Normal -AT` for regular meetings. Example:
 
 ```csv
 project_number,project_name,task_number,task_name,type,date,hours,comment,time_from,time_to
-295189,BAW-CC-Cloud-OU216,61.2,Cloud support,Normal -AT,2026-03-24,1.0,Team Sync,09:00,10:00
-291648,CE COMPDevActive Deliv. OU216,07,Chapter Work,Normal -AT,2026-03-26,1.0,Weekly WebDev 2026,14:00,15:00
+295189,ACM-CC-Cloud-Ops,61.2,Cloud support,Normal -AT,2026-03-24,1.0,Team Sync,09:00,10:00
+291648,CE DevActive Delivery,07,Chapter Work,Normal -AT,2026-03-26,1.0,Weekly WebDev 2026,14:00,15:00
 ```
 
-**Step C — run the script** (uses built-in defaults for `--events` and `--output`, no path args needed):
+**Step B — generate the Excel** (uses built-in defaults for input/output paths, no args needed):
 ```bash
 python "$HOME/.agents/skills/mytime-calender-booker/scripts/book-timecard.py"
 ```
@@ -332,48 +333,27 @@ Remove the event from the mapping list. Show the updated table. Ask for confirma
 
 ---
 
-## Phase 3: Final Timecard Review
-
-The Excel is generated automatically after Step 9 confirmation. If the user requests changes via **pick #N** or **skip #N**:
-
-### Step 10 — Handle post-generation adjustments
-
-**"pick #N":**
-1. Re-open `booking_mappings` in context.
-2. For row N, present the list of available projects and tasks from `projects.toon`.
-3. Let the user choose.
-4. Update the event in `booking_mappings`.
-5. Re-write the updated `bookings.csv` using the `Write` tool and re-run `python "$HOME/.agents/skills/mytime-calender-booker/scripts/book-timecard.py"` (same defaults as Step 9).
-6. Show the updated output.
-
-**"skip #N":** Remove the row from `booking_mappings`, re-write `bookings.csv`, re-run `python "$HOME/.agents/skills/mytime-calender-booker/scripts/book-timecard.py"`, show updated output.
-
----
-
-## Requirements
-
-- PowerShell (Windows) — for Outlook COM automation
-- Python 3 — for all scripts
-- `openpyxl` — install with: `pip install openpyxl`
-- `toon_format` — install with: `pip install git+https://github.com/toon-format/toon-python.git` (used by `parse-ics.py` and `parse-projects.py` only)
-
 ## File structure reference
 
 ```
 mytime-calender-booker/
   SKILL.md                            ← this file
+  assets/
+    timecard_template.xlsx             ← blank MyTime timecard template (ships with skill)
   scripts/
-    export-calendar.ps1               ← Outlook COM export (PowerShell)
+    export-calendar.ps1               ← Outlook COM export (PowerShell, prefers new Outlook)
     parse-ics.py                       ← ICS parser and filter (Python, stdlib)
     parse-projects.py                  ← MyTime HTML → projects.toon (Python, toon_format)
     book-timecard.py                   ← Writes pre-mapped events into xlsx template (Python, openpyxl)
 ```
 
+The Excel template (`assets/timecard_template.xlsx`) is bundled with the skill and found automatically by `book-timecard.py` — no manual setup needed.
+
 ## Output files
 
 | File | When written | Overwritten on next run |
 |---|---|---|
-| `%USERPROFILE%\.mytime-booker\calendar.ics` | Every Phase 1 export | Yes — always fresh |
-| `%USERPROFILE%\.mytime-booker\projects.toon` | When user confirms projects changed | Only when user says "yes" |
-| `%USERPROFILE%\.mytime-booker\bookings.csv` | After Step 9 confirmation | Yes — overwritten each confirmation |
-| `Downloads\timecard_output.xlsx` | After Step 9 confirmation | Yes — overwritten each confirmation |
+| `~\.mytime-booker\calendar.ics` | Every Phase 1 export | Yes — always fresh |
+| `~\.mytime-booker\projects.toon` | When user confirms projects changed | Only when user says "yes" |
+| `~\.mytime-booker\bookings.csv` | After Step 9 confirmation | Yes — overwritten each confirmation |
+| `~\Downloads\timecard_output.xlsx` | After Step 9 confirmation | Yes — overwritten each confirmation |

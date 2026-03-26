@@ -10,7 +10,7 @@ An AI agent skill that automates the full MyTime timecard booking workflow — f
 |---|---|
 | Windows 10/11 | Required for Outlook COM automation |
 | PowerShell 5.1+ | Included with Windows |
-| Microsoft Outlook | Classic (`OUTLOOK.EXE`) or new (`olk.exe`) — must be installed |
+| Microsoft Outlook | Classic (`OUTLOOK.EXE`) or new (`olk.exe`) — must be installed. New Outlook preferred. |
 | Python 3.9+ | [python.org](https://www.python.org/downloads/) |
 | `openpyxl` | `pip install openpyxl` |
 | `toon_format` | `pip install git+https://github.com/toon-format/toon-python.git` |
@@ -43,7 +43,7 @@ The skill needs a local copy of your MyTime project list to map meetings:
 3. Save the page: **Ctrl+S** → save anywhere (e.g. Desktop)
 4. When the skill asks for your project file, provide the saved path
 
-The skill parses the HTML and caches the result to `%USERPROFILE%\.mytime-booker\projects.toon`. You only need to repeat this step when your project assignments change.
+The skill parses the HTML and caches the result to `~\.mytime-booker\projects.toon`. You only need to repeat this step when your project assignments change.
 
 ---
 
@@ -74,9 +74,9 @@ Confirmed mappings are written directly to `Downloads\timecard_output.xlsx` in t
 
 | File | Location | When written |
 |---|---|---|
-| `calendar.ics` | `%USERPROFILE%\.mytime-booker\` | Every export |
-| `projects.toon` | `%USERPROFILE%\.mytime-booker\` | First run / when projects change |
-| `timecard_output.xlsx` | `%USERPROFILE%\Downloads\` | After each confirmed booking |
+| `calendar.ics` | `~\.mytime-booker\` | Every export |
+| `projects.toon` | `~\.mytime-booker\` | First run / when projects change |
+| `timecard_output.xlsx` | `~\Downloads\` | After each confirmed booking |
 
 ---
 
@@ -86,12 +86,16 @@ Confirmed mappings are written directly to `Downloads\timecard_output.xlsx` in t
 mytime-calender-booker/
   SKILL.md                   ← skill instructions (read by the AI agent)
   README.md                  ← this file
+  assets/
+    timecard_template.xlsx   ← blank MyTime timecard template (ships with skill)
   scripts/
-    export-calendar.ps1      ← Outlook COM export (PowerShell)
+    export-calendar.ps1      ← Outlook COM export (PowerShell, prefers new Outlook)
     parse-ics.py             ← ICS parser and date filter (Python, toon_format)
     parse-projects.py        ← MyTime HTML → projects.toon (Python, toon_format)
     book-timecard.py         ← mappings → timecard.xlsx (Python, openpyxl)
 ```
+
+The Excel template is bundled with the skill and found automatically — no manual setup needed.
 
 ---
 
@@ -102,7 +106,7 @@ mytime-calender-booker/
 | Classic Outlook (Office 365 / 2019 / 2021) | `OUTLOOK.EXE` | `GetActiveObject` |
 | New modern Outlook (Windows Store app) | `olk.exe` | `New-Object -ComObject` |
 
-Both are detected automatically. If neither is running when the skill starts, it launches whichever is installed.
+Both are detected automatically. If neither is running when the skill starts, it launches new Outlook (`olk.exe`) first; if unavailable, it falls back to classic Outlook.
 
 ---
 

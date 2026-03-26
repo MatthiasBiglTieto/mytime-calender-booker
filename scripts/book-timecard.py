@@ -5,7 +5,12 @@ import sys
 
 import openpyxl
 
-TEMPLATE_PATH = os.path.join(os.path.expanduser("~"), ".mytime-booker", "timecard_template.xlsx")
+# Resolve template: bundled asset first (relative to this script), then runtime fallback
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_BUNDLED_TEMPLATE = os.path.join(_SCRIPT_DIR, "..", "assets", "timecard_template.xlsx")
+_RUNTIME_TEMPLATE = os.path.join(os.path.expanduser("~"), ".mytime-booker", "timecard_template.xlsx")
+TEMPLATE_PATH = _BUNDLED_TEMPLATE if os.path.exists(_BUNDLED_TEMPLATE) else _RUNTIME_TEMPLATE
+
 DEFAULT_EVENTS = os.path.join(os.path.expanduser("~"), ".mytime-booker", "bookings.csv")
 DEFAULT_OUTPUT = os.path.join(os.path.expanduser("~"), "Downloads", "timecard_output.xlsx")
 DEFAULT_TYPE = "Normal -AT"
